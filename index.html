@@ -150,6 +150,15 @@
     color: var(--work);
     min-height: 13px;
   }
+
+  .dashboard-link {
+    display: inline-block;
+    margin-top: 14px;
+    font-size: 11px;
+    color: var(--muted);
+    text-decoration: none;
+  }
+  .dashboard-link:hover { color: var(--text); }
 </style>
 </head>
 <body>
@@ -170,6 +179,7 @@
       <button id="analyticsLoginBtn">View</button>
     </div>
     <div class="analytics-error" id="analyticsError"></div>
+    <a href="dashboard.html" class="dashboard-link">View full dashboard &rarr;</a>
   </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>

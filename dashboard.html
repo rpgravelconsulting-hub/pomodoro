@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pomodoro Analytics</title>
+<style>
+  :root {
+    --bg: #1d1f27;
+    --card: #262936;
+    --text: #f1f1f1;
+    --muted: #9aa0ac;
+    --axis: #4a4d5c;
+    --grid: #33364280;
+    --accent: #3987e5;
+    --work: #e63946;
+    --border: #3a3d4a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 16px 64px;
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .top-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0;
+  }
+  .back-link {
+    color: var(--muted);
+    font-size: 13px;
+    text-decoration: none;
+  }
+  .back-link:hover { color: var(--text); }
+
+  .login-card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 32px;
+    text-align: center;
+  }
+  .login-card p {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 16px;
+  }
+  .login-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+  }
+  .login-row input {
+    width: 180px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  .login-row button {
+    border: none;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--accent);
+    color: white;
+  }
+  .login-error {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--work);
+    min-height: 14px;
+  }
+
+  .dashboard { display: none; }
+
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .tile {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 16px 14px;
+  }
+  .tile-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .tile-value {
+    font-size: 26px;
+    font-weight: 700;
+  }
+
+  .chart-card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 24px 20px 12px;
+    position: relative;
+  }
+  .chart-title {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 16px;
+  }
+  svg { display: block; overflow: visible; }
+  .bar { fill: var(--accent); }
+  .bar-hit { fill: transparent; cursor: pointer; }
+  .axis-label {
+    fill: var(--muted);
+    font-size: 10px;
+  }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .baseline { stroke: var(--axis); stroke-width: 1; }
+
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: #14151b;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+    opacity: 0;
+    transition: opacity 0.1s ease;
+    white-space: nowrap;
+    z-index: 10;
+  }
+  .tooltip .t-date { color: var(--muted); font-size: 11px; }
+
+  @media (max-width: 480px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top-row">
+      <h1>Pomodoro Analytics</h1>
+      <a class="back-link" href="index.html">&larr; Back to timer</a>
+    </div>
+
+    <div class="login-card" id="loginCard">
+      <p>Enter the analytics password to view your stats.</p>
+      <div class="login-row">
+        <input type="password" id="passwordInput" placeholder="Password">
+        <button id="loginBtn">View dashboard</button>
+      </div>
+      <div class="login-error" id="loginError"></div>
+    </div>
+
+    <div class="dashboard" id="dashboard">
+      <div class="tiles">
+        <div class="tile">
+          <div class="tile-label">Today focus</div>
+          <div class="tile-value" id="tileTodayMinutes">-</div>
+        </div>
+        <div class="tile">
+          <div class="tile-label">Today sessions</div>
+          <div class="tile-value" id="tileTodaySessions">-</div>
+        </div>
+        <div class="tile">
+          <div class="tile-label">Total focus</div>
+          <div class="tile-value" id="tileTotalMinutes">-</div>
+        </div>
+        <div class="tile">
+          <div class="tile-label">Streak</div>
+          <div class="tile-value" id="tileStreak">-</div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <p class="chart-title">Focus minutes &middot; last 14 days</p>
+        <svg id="chart" width="100%" height="200" viewBox="0 0 680 200" preserveAspectRatio="none"></svg>
+        <div class="tooltip" id="tooltip"></div>
+      </div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+  const SUPABASE_URL = 'https://skdvlhsgzxnstcsbmcjc.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_psMJz3oXWOGuY5h8TWA3bw_Tt_lFVN8';
+  const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const ANALYTICS_PASSWORD_KEY = 'pomodoro_analytics_password';
+
+  const loginCard = document.getElementById('loginCard');
+  const dashboard = document.getElementById('dashboard');
+  const passwordInput = document.getElementById('passwordInput');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginError = document.getElementById('loginError');
+  const tooltip = document.getElementById('tooltip');
+
+  function formatMinutes(m) {
+    return m >= 60 ? `${(m / 60).toFixed(1)}h` : `${m}m`;
+  }
+
+  async function loadDashboard(password) {
+    const [statsRes, dailyRes] = await Promise.all([
+      db.rpc('get_pomodoro_stats', { input_password: password }),
+      db.rpc('get_daily_focus_stats', { input_password: password, days_back: 14 }),
+    ]);
+
+    if (statsRes.error || dailyRes.error) {
+      localStorage.removeItem(ANALYTICS_PASSWORD_KEY);
+      loginError.textContent = 'Wrong password';
+      loginCard.style.display = 'block';
+      dashboard.style.display = 'none';
+      return;
+    }
+
+    const stats = statsRes.data;
+    document.getElementById('tileTodayMinutes').textContent = formatMinutes(stats.today_focus_minutes);
+    document.getElementById('tileTodaySessions').textContent = stats.today_sessions;
+    document.getElementById('tileTotalMinutes').textContent = formatMinutes(stats.total_focus_minutes);
+    document.getElementById('tileStreak').textContent = `${stats.current_streak_days}d`;
+
+    renderChart(dailyRes.data || []);
+
+    loginCard.style.display = 'none';
+    dashboard.style.display = 'block';
+  }
+
+  function renderChart(days) {
+    const svg = document.getElementById('chart');
+    svg.innerHTML = '';
+
+    const W = 680, H = 200;
+    const padLeft = 30, padRight = 10, padTop = 10, padBottom = 24;
+    const plotW = W - padLeft - padRight;
+    const plotH = H - padTop - padBottom;
+    const baselineY = padTop + plotH;
+
+    const maxVal = Math.max(1, ...days.map(d => d.focus_minutes));
+    const niceMax = Math.ceil(maxVal / 10) * 10 || 10;
+
+    const ns = 'http://www.w3.org/2000/svg';
+    function el(tag, attrs) {
+      const node = document.createElementNS(ns, tag);
+      for (const k in attrs) node.setAttribute(k, attrs[k]);
+      return node;
+    }
+
+    [0, 0.5, 1].forEach((frac) => {
+      const y = padTop + plotH * (1 - frac);
+      svg.appendChild(el('line', { x1: padLeft, x2: W - padRight, y1: y, y2: y, class: 'gridline' }));
+      const label = el('text', { x: padLeft - 6, y: y + 3, class: 'axis-label', 'text-anchor': 'end' });
+      label.textContent = Math.round(niceMax * frac);
+      svg.appendChild(label);
+    });
+    svg.appendChild(el('line', { x1: padLeft, x2: W - padRight, y1: baselineY, y2: baselineY, class: 'baseline' }));
+
+    const n = days.length || 1;
+    const slot = plotW / n;
+    const barW = Math.min(24, slot * 0.55);
+    const gap = 2;
+
+    days.forEach((d, i) => {
+      const cx = padLeft + slot * i + slot / 2;
+      const val = d.focus_minutes;
+      const barH = Math.max(0, (val / niceMax) * plotH);
+      const y = baselineY - barH;
+      const w = Math.max(0, barW - gap);
+      const r = Math.min(4, w / 2, barH);
+
+      const bar = el('rect', {
+        x: cx - w / 2, y: barH > 0 ? y : baselineY - 0.5,
+        width: w, height: Math.max(barH, 0.5),
+        rx: r, ry: r, class: 'bar',
+      });
+      svg.appendChild(bar);
+
+      if (i === 0 || i === n - 1 || i % 2 === 0) {
+        const dt = new Date(d.day + 'T00:00:00');
+        const label = el('text', {
+          x: cx, y: H - 6, class: 'axis-label', 'text-anchor': 'middle',
+        });
+        label.textContent = `${dt.getMonth() + 1}/${dt.getDate()}`;
+        svg.appendChild(label);
+      }
+
+      const hit = el('rect', {
+        x: padLeft + slot * i, y: padTop, width: slot, height: plotH, class: 'bar-hit',
+      });
+      hit.addEventListener('mouseenter', (e) => showTooltip(e, d));
+      hit.addEventListener('mousemove', (e) => positionTooltip(e));
+      hit.addEventListener('mouseleave', hideTooltip);
+      svg.appendChild(hit);
+    });
+  }
+
+  function showTooltip(e, d) {
+    const dt = new Date(d.day + 'T00:00:00');
+    const dateStr = dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    tooltip.innerHTML =
+      `<div class="t-date">${dateStr}</div>` +
+      `<div>${d.focus_minutes}m focus &middot; ${d.focus_sessions} session${d.focus_sessions === 1 ? '' : 's'}</div>`;
+    tooltip.style.opacity = '1';
+    positionTooltip(e);
+  }
+
+  function positionTooltip(e) {
+    const card = document.querySelector('.chart-card');
+    const rect = card.getBoundingClientRect();
+    tooltip.style.left = `${e.clientX - rect.left + 12}px`;
+    tooltip.style.top = `${e.clientY - rect.top - 40}px`;
+  }
+
+  function hideTooltip() {
+    tooltip.style.opacity = '0';
+  }
+
+  async function submitLogin() {
+    const password = passwordInput.value;
+    if (!password) return;
+    const { data: valid, error } = await db.rpc('verify_analytics_password', {
+      input_password: password,
+    });
+    if (error || !valid) {
+      loginError.textContent = 'Wrong password';
+      return;
+    }
+    localStorage.setItem(ANALYTICS_PASSWORD_KEY, password);
+    loginError.textContent = '';
+    loadDashboard(password);
+  }
+
+  loginBtn.addEventListener('click', submitLogin);
+  passwordInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitLogin();
+  });
+
+  const savedPassword = localStorage.getItem(ANALYTICS_PASSWORD_KEY);
+  if (savedPassword) {
+    loadDashboard(savedPassword);
+  }
+</script>
+</body>
+</html>
