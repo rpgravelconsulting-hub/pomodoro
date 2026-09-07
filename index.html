@@ -115,6 +115,13 @@
     color: var(--muted);
     min-height: 16px;
   }
+
+  .stats {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--muted);
+    min-height: 14px;
+  }
 </style>
 </head>
 <body>
@@ -129,12 +136,14 @@
       <button id="resetBtn">Reset</button>
     </div>
     <div class="status" id="status"></div>
+    <div class="stats" id="statsLine"></div>
   </div>
 
 <script>
-  const WORK_MIN = 25;
-  const BREAK_MIN = 5;
-  const TOTAL_ROUNDS = 4;
+  let WORK_MIN = 25;
+  let BREAK_MIN = 5;
+  let TOTAL_ROUNDS = 4;
+  const API_BASE = 'http://localhost:8000/api';
 
   const timeDisplay = document.getElementById('timeDisplay');
   const modeBadge = document.getElementById('modeBadge');
@@ -142,6 +151,7 @@
   const startBtn = document.getElementById('startBtn');
   const resetBtn = document.getElementById('resetBtn');
   const status = document.getElementById('status');
+  const statsLine = document.getElementById('statsLine');
   const progressRing = document.getElementById('progressRing');
   const body = document.body;
 
@@ -151,10 +161,55 @@
   let timerId = null;
   let running = false;
 
-  for (let i = 0; i < TOTAL_ROUNDS; i++) {
-    const dot = document.createElement('div');
-    dot.className = 'dot';
-    progressRing.appendChild(dot);
+  function createDots() {
+    progressRing.innerHTML = '';
+    for (let i = 0; i < TOTAL_ROUNDS; i++) {
+      const dot = document.createElement('div');
+      dot.className = 'dot';
+      progressRing.appendChild(dot);
+    }
+  }
+  createDots();
+
+  async function loadSettings() {
+    try {
+      const res = await fetch(`${API_BASE}/settings`);
+      if (!res.ok) return;
+      const settings = await res.json();
+      WORK_MIN = settings.work_minutes;
+      BREAK_MIN = settings.break_minutes;
+      TOTAL_ROUNDS = settings.rounds;
+      createDots();
+      reset();
+    } catch (e) {
+      // backend not running - fall back to local defaults
+    }
+  }
+
+  async function logSession(type, durationSeconds, roundNumber) {
+    try {
+      await fetch(`${API_BASE}/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, duration_seconds: durationSeconds, round: roundNumber }),
+      });
+    } catch (e) {
+      // backend not running - skip logging
+    }
+    refreshStats();
+  }
+
+  async function refreshStats() {
+    try {
+      const res = await fetch(`${API_BASE}/stats`);
+      if (!res.ok) return;
+      const stats = await res.json();
+      statsLine.textContent =
+        `Today: ${stats.today_sessions} sessions, ${stats.today_focus_minutes}m focus · ` +
+        `Streak: ${stats.current_streak_days}d`;
+    } catch (e) {
+      // backend not running - leave stats blank
+    }
   }
 
   function updateDots() {
@@ -203,6 +258,7 @@
 
   function advance() {
     beep();
+    logSession(isBreak ? 'break' : 'focus', (isBreak ? BREAK_MIN : WORK_MIN) * 60, round);
     if (!isBreak) {
       isBreak = true;
       secondsLeft = BREAK_MIN * 60;
@@ -252,6 +308,8 @@
   resetBtn.addEventListener('click', reset);
 
   render();
+  loadSettings();
+  refreshStats();
 </script>
 </body>
 </html>
