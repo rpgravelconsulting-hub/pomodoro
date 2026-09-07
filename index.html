@@ -159,6 +159,60 @@
     text-decoration: none;
   }
   .dashboard-link:hover { color: var(--text); }
+
+  .settings-toggle {
+    display: block;
+    margin: 10px auto 0;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 4px;
+  }
+  .settings-toggle:hover { color: var(--text); }
+
+  .settings-panel {
+    display: none;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border, #3a3d4a);
+    text-align: left;
+  }
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .settings-row input {
+    width: 60px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid #3a3d4a;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    text-align: center;
+  }
+  .settings-save {
+    width: 100%;
+    margin-top: 4px;
+    background: var(--work);
+    color: white;
+    padding: 10px;
+  }
+  body.break-mode .settings-save { background: var(--break); }
+  .settings-status {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    min-height: 13px;
+    text-align: center;
+  }
 </style>
 </head>
 <body>
@@ -180,6 +234,23 @@
     </div>
     <div class="analytics-error" id="analyticsError"></div>
     <a href="dashboard.html" class="dashboard-link">View full dashboard &rarr;</a>
+    <button class="settings-toggle" id="settingsToggle">Settings</button>
+    <div class="settings-panel" id="settingsPanel">
+      <div class="settings-row">
+        <span>Focus minutes</span>
+        <input type="number" id="workMinutesInput" min="1" max="180">
+      </div>
+      <div class="settings-row">
+        <span>Break minutes</span>
+        <input type="number" id="breakMinutesInput" min="1" max="60">
+      </div>
+      <div class="settings-row">
+        <span>Rounds</span>
+        <input type="number" id="roundsInput" min="1" max="20">
+      </div>
+      <button class="settings-save" id="settingsSaveBtn">Save settings</button>
+      <div class="settings-status" id="settingsStatus"></div>
+    </div>
   </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -203,6 +274,13 @@
   const analyticsLoginBtn = document.getElementById('analyticsLoginBtn');
   const analyticsError = document.getElementById('analyticsError');
   const progressRing = document.getElementById('progressRing');
+  const settingsToggle = document.getElementById('settingsToggle');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const workMinutesInput = document.getElementById('workMinutesInput');
+  const breakMinutesInput = document.getElementById('breakMinutesInput');
+  const roundsInput = document.getElementById('roundsInput');
+  const settingsSaveBtn = document.getElementById('settingsSaveBtn');
+  const settingsStatus = document.getElementById('settingsStatus');
   const body = document.body;
 
   const ANALYTICS_PASSWORD_KEY = 'pomodoro_analytics_password';
@@ -234,6 +312,9 @@
       WORK_MIN = data.work_minutes;
       BREAK_MIN = data.break_minutes;
       TOTAL_ROUNDS = data.rounds;
+      workMinutesInput.value = WORK_MIN;
+      breakMinutesInput.value = BREAK_MIN;
+      roundsInput.value = TOTAL_ROUNDS;
       createDots();
       reset();
     } catch (e) {
@@ -312,6 +393,48 @@
   analyticsPassword.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submitAnalyticsLogin();
   });
+
+  settingsToggle.addEventListener('click', () => {
+    const showing = settingsPanel.style.display === 'block';
+    settingsPanel.style.display = showing ? 'none' : 'block';
+  });
+
+  async function saveSettings() {
+    const work_minutes = parseInt(workMinutesInput.value, 10);
+    const break_minutes = parseInt(breakMinutesInput.value, 10);
+    const rounds = parseInt(roundsInput.value, 10);
+
+    if (!work_minutes || work_minutes < 1 || work_minutes > 180 ||
+        !break_minutes || break_minutes < 1 || break_minutes > 60 ||
+        !rounds || rounds < 1 || rounds > 20) {
+      settingsStatus.textContent = 'Check the values (focus 1-180, break 1-60, rounds 1-20)';
+      return;
+    }
+
+    settingsSaveBtn.disabled = true;
+    settingsStatus.textContent = 'Saving...';
+    try {
+      const { error } = await db
+        .from('settings')
+        .update({ work_minutes, break_minutes, rounds })
+        .eq('id', 1);
+      if (error) {
+        settingsStatus.textContent = 'Failed to save';
+      } else {
+        WORK_MIN = work_minutes;
+        BREAK_MIN = break_minutes;
+        TOTAL_ROUNDS = rounds;
+        createDots();
+        reset();
+        settingsStatus.textContent = 'Saved';
+      }
+    } catch (e) {
+      settingsStatus.textContent = 'Supabase unreachable';
+    }
+    settingsSaveBtn.disabled = false;
+  }
+
+  settingsSaveBtn.addEventListener('click', saveSettings);
 
   function updateDots() {
     const dots = progressRing.querySelectorAll('.dot');
