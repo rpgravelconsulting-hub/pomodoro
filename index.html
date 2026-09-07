@@ -172,11 +172,14 @@
     <div class="analytics-error" id="analyticsError"></div>
   </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
   let WORK_MIN = 25;
   let BREAK_MIN = 5;
   let TOTAL_ROUNDS = 4;
-  const API_BASE = 'http://localhost:8000/api';
+  const SUPABASE_URL = 'https://skdvlhsgzxnstcsbmcjc.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_psMJz3oXWOGuY5h8TWA3bw_Tt_lFVN8';
+  const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const timeDisplay = document.getElementById('timeDisplay');
   const modeBadge = document.getElementById('modeBadge');
@@ -212,28 +215,31 @@
 
   async function loadSettings() {
     try {
-      const res = await fetch(`${API_BASE}/settings`);
-      if (!res.ok) return;
-      const settings = await res.json();
-      WORK_MIN = settings.work_minutes;
-      BREAK_MIN = settings.break_minutes;
-      TOTAL_ROUNDS = settings.rounds;
+      const { data, error } = await db
+        .from('settings')
+        .select('work_minutes, break_minutes, rounds')
+        .eq('id', 1)
+        .single();
+      if (error || !data) return;
+      WORK_MIN = data.work_minutes;
+      BREAK_MIN = data.break_minutes;
+      TOTAL_ROUNDS = data.rounds;
       createDots();
       reset();
     } catch (e) {
-      // backend not running - fall back to local defaults
+      // supabase unreachable - fall back to local defaults
     }
   }
 
   async function logSession(type, durationSeconds, roundNumber) {
     try {
-      await fetch(`${API_BASE}/sessions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, duration_seconds: durationSeconds, round: roundNumber }),
+      await db.from('sessions').insert({
+        type,
+        duration_seconds: durationSeconds,
+        round: roundNumber,
       });
     } catch (e) {
-      // backend not running - skip logging
+      // supabase unreachable - skip logging
     }
     refreshStats();
   }
@@ -245,22 +251,20 @@
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/stats`, {
-        headers: { 'X-Analytics-Password': password },
+      const { data: stats, error } = await db.rpc('get_pomodoro_stats', {
+        input_password: password,
       });
-      if (res.status === 401) {
+      if (error) {
         localStorage.removeItem(ANALYTICS_PASSWORD_KEY);
         showAnalyticsLogin('Wrong password');
         return;
       }
-      if (!res.ok) return;
-      const stats = await res.json();
       statsLine.textContent =
         `Today: ${stats.today_sessions} sessions, ${stats.today_focus_minutes}m focus · ` +
         `Streak: ${stats.current_streak_days}d`;
       hideAnalyticsLogin();
     } catch (e) {
-      // backend not running - leave stats blank
+      // supabase unreachable - leave stats blank
     }
   }
 
@@ -279,12 +283,10 @@
     const password = analyticsPassword.value;
     if (!password) return;
     try {
-      const res = await fetch(`${API_BASE}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+      const { data: valid, error } = await db.rpc('verify_analytics_password', {
+        input_password: password,
       });
-      if (!res.ok) {
+      if (error || !valid) {
         analyticsError.textContent = 'Wrong password';
         return;
       }
@@ -292,7 +294,7 @@
       analyticsPassword.value = '';
       refreshStats();
     } catch (e) {
-      analyticsError.textContent = 'Backend unreachable';
+      analyticsError.textContent = 'Supabase unreachable';
     }
   }
 
