@@ -1,9 +1,10 @@
 import os
+import secrets
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from supabase import Client, create_client
@@ -13,6 +14,13 @@ load_dotenv()
 supabase: Client = create_client(
     os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"]
 )
+
+ANALYTICS_PASSWORD = os.environ["ANALYTICS_PASSWORD"]
+
+
+def require_analytics_password(x_analytics_password: str = Header(default="")):
+    if not secrets.compare_digest(x_analytics_password, ANALYTICS_PASSWORD):
+        raise HTTPException(status_code=401, detail="Invalid password")
 
 app = FastAPI(title="Pomodoro API")
 
@@ -36,6 +44,17 @@ class SettingsIn(BaseModel):
     rounds: int = Field(gt=0, le=20)
 
 
+class LoginIn(BaseModel):
+    password: str
+
+
+@app.post("/api/login")
+def login(body: LoginIn):
+    if not secrets.compare_digest(body.password, ANALYTICS_PASSWORD):
+        raise HTTPException(status_code=401, detail="Invalid password")
+    return {"ok": True}
+
+
 @app.post("/api/sessions", status_code=201)
 def create_session(session: SessionIn):
     completed_at = datetime.now(timezone.utc).isoformat()
@@ -54,7 +73,7 @@ def create_session(session: SessionIn):
     return result.data[0]
 
 
-@app.get("/api/sessions")
+@app.get("/api/sessions", dependencies=[Depends(require_analytics_password)])
 def list_sessions(limit: int = 50):
     result = (
         supabase.table("sessions")
@@ -66,7 +85,7 @@ def list_sessions(limit: int = 50):
     return result.data
 
 
-@app.get("/api/stats")
+@app.get("/api/stats", dependencies=[Depends(require_analytics_password)])
 def get_stats():
     result = (
         supabase.table("sessions")

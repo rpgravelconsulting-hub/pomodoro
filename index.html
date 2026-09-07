@@ -122,6 +122,34 @@
     color: var(--muted);
     min-height: 14px;
   }
+
+  .analytics-login {
+    margin-top: 12px;
+    display: none;
+    gap: 6px;
+    justify-content: center;
+  }
+  .analytics-login input {
+    width: 120px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #3a3d4a;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 12px;
+  }
+  .analytics-login button {
+    padding: 6px 12px;
+    font-size: 12px;
+    background: #3a3d4a;
+    color: var(--text);
+  }
+  .analytics-error {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--work);
+    min-height: 13px;
+  }
 </style>
 </head>
 <body>
@@ -137,6 +165,11 @@
     </div>
     <div class="status" id="status"></div>
     <div class="stats" id="statsLine"></div>
+    <div class="analytics-login" id="analyticsLogin">
+      <input type="password" id="analyticsPassword" placeholder="Analytics password">
+      <button id="analyticsLoginBtn">View</button>
+    </div>
+    <div class="analytics-error" id="analyticsError"></div>
   </div>
 
 <script>
@@ -152,8 +185,14 @@
   const resetBtn = document.getElementById('resetBtn');
   const status = document.getElementById('status');
   const statsLine = document.getElementById('statsLine');
+  const analyticsLogin = document.getElementById('analyticsLogin');
+  const analyticsPassword = document.getElementById('analyticsPassword');
+  const analyticsLoginBtn = document.getElementById('analyticsLoginBtn');
+  const analyticsError = document.getElementById('analyticsError');
   const progressRing = document.getElementById('progressRing');
   const body = document.body;
+
+  const ANALYTICS_PASSWORD_KEY = 'pomodoro_analytics_password';
 
   let round = 1;
   let isBreak = false;
@@ -200,17 +239,67 @@
   }
 
   async function refreshStats() {
+    const password = localStorage.getItem(ANALYTICS_PASSWORD_KEY);
+    if (!password) {
+      showAnalyticsLogin();
+      return;
+    }
     try {
-      const res = await fetch(`${API_BASE}/stats`);
+      const res = await fetch(`${API_BASE}/stats`, {
+        headers: { 'X-Analytics-Password': password },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem(ANALYTICS_PASSWORD_KEY);
+        showAnalyticsLogin('Wrong password');
+        return;
+      }
       if (!res.ok) return;
       const stats = await res.json();
       statsLine.textContent =
         `Today: ${stats.today_sessions} sessions, ${stats.today_focus_minutes}m focus · ` +
         `Streak: ${stats.current_streak_days}d`;
+      hideAnalyticsLogin();
     } catch (e) {
       // backend not running - leave stats blank
     }
   }
+
+  function showAnalyticsLogin(error) {
+    statsLine.textContent = '';
+    analyticsLogin.style.display = 'flex';
+    analyticsError.textContent = error || '';
+  }
+
+  function hideAnalyticsLogin() {
+    analyticsLogin.style.display = 'none';
+    analyticsError.textContent = '';
+  }
+
+  async function submitAnalyticsLogin() {
+    const password = analyticsPassword.value;
+    if (!password) return;
+    try {
+      const res = await fetch(`${API_BASE}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        analyticsError.textContent = 'Wrong password';
+        return;
+      }
+      localStorage.setItem(ANALYTICS_PASSWORD_KEY, password);
+      analyticsPassword.value = '';
+      refreshStats();
+    } catch (e) {
+      analyticsError.textContent = 'Backend unreachable';
+    }
+  }
+
+  analyticsLoginBtn.addEventListener('click', submitAnalyticsLogin);
+  analyticsPassword.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitAnalyticsLogin();
+  });
 
   function updateDots() {
     const dots = progressRing.querySelectorAll('.dot');
